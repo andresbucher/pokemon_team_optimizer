@@ -1,0 +1,10 @@
+0. see if we can use database_checker or cleaner in General? 
+
+
+1.
+check if all pokemon are there (use pokemon_images(old)) for reference and naming convention
+check all forms (and if image is true)
+check if naming convention is correct
+
+2. change random image to normal fixed image
+3. check if "image checker" works (so no duplicate will get downloaded)
