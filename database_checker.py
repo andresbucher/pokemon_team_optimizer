@@ -40,8 +40,3 @@ def verify_image_database(image_folder):
 # Example Usage
 image_folder = r"./data/image Dataset/dataset/dataset" # Replace with your folder path
 verify_image_database(image_folder)
-
-
-
-image_folder = r"./data/image Dataset/dataset/dataset"
-image_folder = r"./data/image Dataset/dataset/dataset"

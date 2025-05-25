@@ -4,5 +4,7 @@
 -> add pokemon analysis for Basestat of team (highlighting)
 -> add clear analysis for suggestions
 
+-> save, delete teams and boxes somewhere?
+
 
 2. Git ignore scrapped images
