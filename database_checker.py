@@ -4,7 +4,7 @@ def verify_image_database(image_folder):
     from collections import defaultdict
 
     pokemon_groups = defaultdict(set)  # Use a set to avoid duplicates
-    pattern = r"(\d+)_\d+_([a-zA-Z0-9]+)(?:-(.*))?.png"  # Matches ID, Name, and optional Form
+    pattern = r"(\d+)_([a-zA-Z0-9]+)(?:-(.*))?.png"  # Matches ID, Name, and optional Form
 
     all_files = os.listdir(image_folder)
 

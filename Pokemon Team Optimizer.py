@@ -712,17 +712,18 @@ class PokemonTeamOptimizer(QMainWindow):
         self.team_view = QScrollArea(self)
 
     def display_team(self):
-        def get_random_image_path(pokemon_id, name, form):
+        def get_image_path(pokemon_id, name, form):
             base_folder = r"./data/pokemon_images"
-            
-            form_suffix = f"-{form}" if form != " " else ""
-
-            pattern = f"{base_folder}/{pokemon_id}_*_{name}{form_suffix}.png"
-            matching_files = glob.glob(pattern)
-            # print(pattern)
-            if matching_files:
-                return random.choice(matching_files)
-            # If no images are found, return a placeholder image
+            # Clean up form for filename
+            form = form.strip()
+            if form and form != " ":
+                filename = f"{pokemon_id}_{name}-{form}.png"
+            else:
+                filename = f"{pokemon_id}_{name}.png"
+            filepath = os.path.join(base_folder, filename)
+            if os.path.isfile(filepath):
+                return filepath
+            # If no image is found, return a placeholder image
             return "./data/misc_images/substitute.png"
 
         # Clear the current team layout
@@ -751,7 +752,7 @@ class PokemonTeamOptimizer(QMainWindow):
             name = pokemon["Name"]
             form = pokemon["Form"]
 
-            img_path = get_random_image_path(pokemon_id, name, form)
+            img_path = get_image_path(pokemon_id, name, form)
 
             # Create a widget for this Pokémon
             pokemon_widget = QWidget()
@@ -909,7 +910,11 @@ class PokemonTeamOptimizer(QMainWindow):
         # Clear the team list
         self.team = []
 
-####### Analysis Section #######
+#===============================
+# Analysis Section
+#===============================
+
+
     def show_team_analysis(self):
         # Get important values for the analysis
         individual_defense, summary_matrix, attack_types, effectiveness_levels = self.analyze_defense()
@@ -1792,7 +1797,8 @@ class PokemonTeamOptimizer(QMainWindow):
             "Crowned", 
             "Hero", 
             "Eternamax", 
-            "Stellar"]       
+            "Stellar"]
+              
         Legendary_ID_filter = [
             144,
             145,
@@ -2208,62 +2214,53 @@ class PokemonTeamOptimizer(QMainWindow):
         self.display_suggestions(suggestions)
     
     def display_suggestions(self, suggestions):
-            def get_random_image_path(pokemon_id, name, form):
-                base_folder = r"./data/pokemon_images"
-                
-                form_suffix = f"-{form}" if form != " " else ""
+        def get_image_path(pokemon_id, name, form):
+            base_folder = r"./data/pokemon_images"
+            form = form.strip()
+            if form and form != " ":
+                filename = f"{pokemon_id}_{name}-{form}.png"
+            else:
+                filename = f"{pokemon_id}_{name}.png"
+            filepath = os.path.join(base_folder, filename)
+            if os.path.isfile(filepath):
+                return filepath
+            return "./data/misc_images/substitute.png"
 
-                pattern = f"{base_folder}/{pokemon_id}_*_{name}{form_suffix}.png"
-                matching_files = glob.glob(pattern)
-                # print(pattern)
-                if matching_files:
-                    return random.choice(matching_files)
-                # If no images are found, return a placeholder image
-                return "./data/misc_images/substitute.png"
+        self.clear_suggestions()
 
-            self.clear_suggestions()
+        fixed_width = 100  # Set your desired width here
 
-            # Add new suggestions
-            for i, suggestion in enumerate(suggestions):
-                name = suggestion['name']
-                form = suggestion['form']
-                score = suggestion['score']
-                score = round(score, 2)
+        for i, suggestion in enumerate(suggestions):
+            name = suggestion['name']
+            form = suggestion['form']
+            score = round(suggestion['score'], 2)
 
-                pokemon = self.pokemon_data[(self.pokemon_data['Name'] == name) & (self.pokemon_data['Form'] == form)].iloc[0]
-                types = f"{pokemon['Type1']}/{pokemon['Type2']}" if pokemon["Type2"] != " " else pokemon['Type1']
-                bst_total = pokemon[['Total']].values[0]
-                role = suggestion['role']
+            pokemon = self.pokemon_data[(self.pokemon_data['Name'] == name) & (self.pokemon_data['Form'] == form)].iloc[0]
+            types = f"{pokemon['Type1']}/{pokemon['Type2']}" if pokemon["Type2"] != " " else pokemon['Type1']
+            bst_total = pokemon[['Total']].values[0]
+            role = suggestion['role']
+            form_text = f" ({form})" if form != " " else ""
+            image_path = get_image_path(pokemon['ID'], name, form)
 
-                # Conditionally add parentheses around the form if it exists
-                form_text = f" ({form})" if form != " " else ""
+            suggestion_label = QLabel(f"Name: {name} {form_text}\nTypes: {types}\nBST: {bst_total}\nRole: {role}\nScore: {score}")
 
-                # Get a random image path
-                image_path = get_random_image_path(pokemon['ID'], name, form)
-
-                # Create a label for the suggestion
-                suggestion_label = QLabel(f"Name: {name} {form_text}\nTypes: {types}\nBST: {bst_total}\nRole: {role}\nScore: {score}")
-
-                # Create an image label
-                image_label = QLabel()
-                if image_path:
-                    pixmap = QPixmap(image_path)
+            image_label = QLabel()
+            if image_path:
+                pixmap = QPixmap(image_path)
+                if not pixmap.isNull():
+                    pixmap = pixmap.scaledToWidth(fixed_width, Qt.SmoothTransformation)
                     image_label.setPixmap(pixmap)
+                else:
+                    image_label.setText("Image not found")
 
-                # Create a vertical layout for each Pokémon
-                vbox = QVBoxLayout()
-                vbox.addWidget(image_label)
-                vbox.addWidget(suggestion_label)
+            vbox = QVBoxLayout()
+            vbox.addWidget(image_label)
+            vbox.addWidget(suggestion_label)
+            self.suggestions_layout.addLayout(vbox, i // 9, i % 9)
 
-                # Add the vertical layout to the grid layout
-                self.suggestions_layout.addLayout(vbox, i // 9, i % 9)
-
-                # print(f"Added suggestion {name} to the grid layout")
-
-            # Set the grid layout to the suggestions widget
-            self.suggestions_widget.setFixedHeight(600)
-            self.suggestions_widget.update()
-
+        self.suggestions_widget.setFixedHeight(600)
+        self.suggestions_widget.update()
+        
     def clear_suggestions(self):
         # Clear previous suggestions
         layout = self.suggestions_layout
@@ -2385,17 +2382,18 @@ class PokemonTeamOptimizer(QMainWindow):
         self.display_pokemon_in_box()
 
     def display_pokemon_in_box(self):
-        def get_random_image_path(pokemon_id, name, form):
+        def get_image_path(pokemon_id, name, form):
             base_folder = r"./data/pokemon_images"
-            
-            form_suffix = f"-{form}" if form != " " else ""
-
-            pattern = f"{base_folder}/{pokemon_id}_*_{name}{form_suffix}.png"
-            matching_files = glob.glob(pattern)
-            # print(pattern)
-            if matching_files:
-                return random.choice(matching_files)
-            # If no images are found, return a placeholder image
+            # Clean up form for filename
+            form = form.strip()
+            if form and form != " ":
+                filename = f"{pokemon_id}_{name}-{form}.png"
+            else:
+                filename = f"{pokemon_id}_{name}.png"
+            filepath = os.path.join(base_folder, filename)
+            if os.path.isfile(filepath):
+                return filepath
+            # If no image is found, return a placeholder image
             return "./data/misc_images/substitute.png"
         
         def remove_pokemon_from_box(index):
@@ -2440,7 +2438,7 @@ class PokemonTeamOptimizer(QMainWindow):
             pokemon_label = QLabel(f"Name: {name} {form}\nTypes: {types}\nBST: {bst_total}")
 
             image_label = QLabel()
-            image_path = get_random_image_path(pokemon['ID'], name, form)
+            image_path = get_image_path(pokemon['ID'], name, form)
             pixmap = QPixmap(image_path)
 
             if not pixmap.isNull():  # Check if the image exists
@@ -2764,18 +2762,18 @@ class PokemonTeamOptimizer(QMainWindow):
         self.PC_Box_display_best_team(best_team, best_score)
     
     def PC_Box_display_best_team(self, best_team, best_score):
-            def get_random_image_path(pokemon_id, name, form):
-            
+            def get_image_path(pokemon_id, name, form):
                 base_folder = r"./data/pokemon_images"
-                
-                form_suffix = f"-{form}" if form != " " else ""
-
-                pattern = f"{base_folder}/{pokemon_id}_*_{name}{form_suffix}.png"
-                matching_files = glob.glob(pattern)
-                # print(pattern)
-                if matching_files:
-                    return random.choice(matching_files)
-                # If no images are found, return a placeholder image
+                # Clean up form for filename
+                form = form.strip()
+                if form and form != " ":
+                    filename = f"{pokemon_id}_{name}-{form}.png"
+                else:
+                    filename = f"{pokemon_id}_{name}.png"
+                filepath = os.path.join(base_folder, filename)
+                if os.path.isfile(filepath):
+                    return filepath
+                # If no image is found, return a placeholder image
                 return "./data/misc_images/substitute.png"
             
             def guess_role(pokemon):
@@ -2822,7 +2820,7 @@ class PokemonTeamOptimizer(QMainWindow):
 
 
                 image_label = QLabel()
-                image_path = get_random_image_path(pokemon['ID'], name, form)
+                image_path = get_image_path(pokemon['ID'], name, form)
                 pixmap = QPixmap(image_path)
 
                 if not pixmap.isNull():  # Check if the image exists
