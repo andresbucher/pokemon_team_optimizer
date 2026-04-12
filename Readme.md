@@ -1,4 +1,4 @@
-# Pokemon Team Optimizer
+# Pokemon Team Builder / Optimizer
 
 Pokemon Team Optimizer is a desktop tool for building stronger teams from your available Pokemon, comparing type matchups, and quickly testing different team combinations.
 
