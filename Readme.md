@@ -6,7 +6,7 @@ Pokemon Team Optimizer is a desktop tool for building stronger teams from your a
 
 ![Team Builder suggestions](data/misc_images/Team_Optimizer_1.png)
 
-![PC Box team builder](data/misc_images/2.png)
+![PC Box team builder](data/misc_images/Team_Optimizer_2.png)
 
 ## Features
 
