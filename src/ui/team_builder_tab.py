@@ -18,13 +18,38 @@ class TeamBuilderTab(QWidget):
         super().__init__()
         self.parent = parent
         self.layout = QVBoxLayout(self)
+
+        # Split Team Builder into a compact left column and a wider right column.
+        self.content_layout = QHBoxLayout()
+        self.left_column = QWidget()
+        self.left_layout = QVBoxLayout(self.left_column)
+        self.right_column = QWidget()
+        self.right_layout = QVBoxLayout(self.right_column)
+
+        self.left_layout.setContentsMargins(0, 0, 0, 0)
+        self.left_layout.setSpacing(4)
+
+        self.left_column.setMinimumWidth(420)
+        self.left_column.setMaximumWidth(560)
+        self.content_layout.addWidget(self.left_column, 3)
+        self.content_layout.addWidget(self.right_column, 5)
+        self.layout.addLayout(self.content_layout)
         
         # Create UI components
-        self.create_filters_section()
+        self.create_title_section()
         self.create_search_section()
+        self.create_filters_section()
         self.create_team_display_section()
         self.create_analysis_section()
         self.create_suggestions_section()
+
+    def create_title_section(self):
+        """Create title/logo area above search controls."""
+        title_label = QLabel("Pokemon Team Optimizer")
+        title_label.setObjectName("title")
+        title_label.setAlignment(Qt.AlignLeft)
+        title_label.setStyleSheet("QLabel#title { margin: 0px; padding: 0px; }")
+        self.left_layout.addWidget(title_label)
     
     def initialize_ui(self):
         """Initialize UI state and populate components."""
@@ -37,7 +62,18 @@ class TeamBuilderTab(QWidget):
     
     def create_filters_section(self):
         """Create filters for Pokemon selection."""
-        filters_layout = QHBoxLayout()
+        self.filters_card = QFrame()
+        self.filters_card.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #DCE6F2; border-radius: 10px; }")
+        filters_layout = QVBoxLayout(self.filters_card)
+        filters_layout.setContentsMargins(8, 8, 8, 8)
+        filters_layout.setSpacing(6)
+
+        filters_title = QLabel("Filters")
+        filters_title.setObjectName("subsection-title")
+        filters_layout.addWidget(filters_title)
+
+        gen_row = QHBoxLayout()
+        type_row = QHBoxLayout()
         
         # Generation filter
         gen_label = QLabel("Generation:")
@@ -57,27 +93,52 @@ class TeamBuilderTab(QWidget):
         self.legendary_filter.setChecked(True)
         
         # Add to layout
-        filters_layout.addWidget(gen_label)
-        filters_layout.addWidget(self.gen_filter)
-        filters_layout.addWidget(type_label)
-        filters_layout.addWidget(self.type_filter)
+        gen_row.addWidget(gen_label)
+        gen_row.addWidget(self.gen_filter)
+        type_row.addWidget(type_label)
+        type_row.addWidget(self.type_filter)
+
+        filters_layout.addLayout(gen_row)
+        filters_layout.addLayout(type_row)
         filters_layout.addWidget(self.mega_filter)
         filters_layout.addWidget(self.legendary_filter)
         
         # Add apply filters button
         self.apply_filters_button = QPushButton("Apply Filters")
-        filters_layout.addWidget(self.apply_filters_button)
+        self.clear_analysis_button = QPushButton("Clear Analysis")
+        self.analyze_team_button = QPushButton("Analyze Team")
+        self.generate_suggestions_button = QPushButton("Generate Suggestions")
+
+        controls_grid = QGridLayout()
+        controls_grid.setHorizontalSpacing(8)
+        controls_grid.setVerticalSpacing(6)
+        controls_grid.addWidget(self.apply_filters_button, 0, 0)
+        controls_grid.addWidget(self.clear_analysis_button, 0, 1)
+        controls_grid.addWidget(self.analyze_team_button, 1, 0)
+        controls_grid.addWidget(self.generate_suggestions_button, 1, 1)
+        filters_layout.addLayout(controls_grid)
         
-        # Add to main layout
-        self.layout.addLayout(filters_layout)
+        # Add to left column
+        self.left_layout.addWidget(self.filters_card)
 
         self.filters_note_label = QLabel("Note: Gen Filters affect analysis and suggestions, but not search results (Fairy Type)")
         self.filters_note_label.setStyleSheet("QLabel { font-size: 12px; color: #5B6470; }")
-        self.layout.addWidget(self.filters_note_label)
+        self.filters_note_label.setWordWrap(True)
+        self.left_layout.addWidget(self.filters_note_label)
     
     def create_search_section(self):
         """Create search section for finding Pokemon."""
-        search_layout = QHBoxLayout()
+        search_card = QFrame()
+        search_card.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #DCE6F2; border-radius: 10px; }")
+        search_layout = QVBoxLayout(search_card)
+        search_layout.setContentsMargins(8, 6, 8, 8)
+        search_layout.setSpacing(4)
+
+        search_title = QLabel("Search")
+        search_title.setObjectName("subsection-title")
+        search_layout.addWidget(search_title)
+
+        search_row = QHBoxLayout()
         
         # Search label and entry
         search_label = QLabel("Search Pokémon:")
@@ -86,61 +147,64 @@ class TeamBuilderTab(QWidget):
         # Autofill results box
         self.autofill_box = QListWidget()
         self.autofill_box.setFixedHeight(0)  # Start hidden
+        self.autofill_box.setVisible(False)
+        self.autofill_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         
         # Add Pokemon button
         self.add_pokemon_button = QPushButton("Add to Team")
         
         # Add to layout
-        search_layout.addWidget(search_label)
-        search_layout.addWidget(self.search_entry)
-        search_layout.addWidget(self.add_pokemon_button)
+        search_row.addWidget(search_label)
+        search_row.addWidget(self.search_entry)
+        search_row.addWidget(self.add_pokemon_button)
+        search_layout.addLayout(search_row)
+        search_layout.addWidget(self.autofill_box)
         
-        # Add to main layout
-        self.layout.addLayout(search_layout)
-        self.layout.addWidget(self.autofill_box)
+        # Add to left column
+        search_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.left_layout.addWidget(search_card)
     
     def create_team_display_section(self):
         """Create section to display the current team."""
-        # Team display area (non-scrollable)
-        team_widget = QWidget()
-        self.team_layout = QHBoxLayout(team_widget)
+        # Team display area on the upper-right in a 3-column grid.
+        self.team_widget = QWidget()
+        self.team_layout = QGridLayout(self.team_widget)
         self.team_layout.setContentsMargins(0, 0, 0, 0)
-        self.team_layout.setSpacing(8)
-        self.team_layout.addStretch()
+        self.team_layout.setHorizontalSpacing(8)
+        self.team_layout.setVerticalSpacing(6)
+
+        # Keep the team panel fixed and non-scrollable, sized for 2 rows x 3 columns.
+        self.team_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.team_widget.setMinimumHeight(300)
+        self.team_widget.setMaximumHeight(300)
+
+        # Match filter box height with team viewer height.
+        if hasattr(self, 'filters_card'):
+            self.filters_card.setMinimumHeight(300)
+            self.filters_card.setMaximumHeight(300)
         
-        # Add to main layout
+        # Add to right column (top section)
         team_label = QLabel("Current Team:")
         team_label.setObjectName("section-title")
-        self.layout.addWidget(team_label)
-        self.layout.addWidget(team_widget)
+        self.right_layout.addWidget(team_label)
+        self.right_layout.addWidget(self.team_widget)
     
     def create_analysis_section(self):
         """Create section for team analysis."""
         # Analysis label
         analysis_label = QLabel("Team Analysis")
         analysis_label.setObjectName("section-title")
-        
-        # Analysis buttons
-        analysis_buttons_layout = QHBoxLayout()
-        self.analyze_team_button = QPushButton("Analyze Team (Defense + Attack + Types)")
-        self.clear_analysis_button = QPushButton("Clear Analysis")
-        self.generate_suggestions_button = QPushButton("Generate Suggestions")
-        
-        analysis_buttons_layout.addWidget(self.analyze_team_button)
-        analysis_buttons_layout.addWidget(self.clear_analysis_button)
-        analysis_buttons_layout.addWidget(self.generate_suggestions_button)
-        
-        # Analysis results area
-        self.analysis_scroll = QScrollArea()
-        self.analysis_scroll.setWidgetResizable(True)
-        self.analysis_widget = QWidget()
+
+        # Analysis results area (non-scrollable).
+        self.analysis_widget = QFrame()
+        self.analysis_widget.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #DCE6F2; border-radius: 10px; }")
         self.analysis_layout = QVBoxLayout(self.analysis_widget)
-        self.analysis_scroll.setWidget(self.analysis_widget)
+        self.analysis_layout.setContentsMargins(8, 8, 8, 8)
+        self.analysis_layout.setSpacing(8)
         
-        # Add to main layout
+        # Add below top row so analysis is full-width.
         self.layout.addWidget(analysis_label)
-        self.layout.addLayout(analysis_buttons_layout)
-        self.layout.addWidget(self.analysis_scroll)
+        self.layout.addWidget(self.analysis_widget, 3)
     
     def create_suggestions_section(self):
         """Create section for team suggestions."""
@@ -158,9 +222,9 @@ class TeamBuilderTab(QWidget):
         self.suggestions_layout.setVerticalSpacing(8)
         self.suggestions_scroll.setWidget(self.suggestions_widget)
         
-        # Add to main layout
+        # Add below analysis so suggestions are also full-width.
         self.layout.addWidget(suggestions_label)
-        self.layout.addWidget(self.suggestions_scroll)
+        self.layout.addWidget(self.suggestions_scroll, 2)
     
     def populate_type_filter(self):
         """Populate type filter with Pokemon types."""
@@ -227,15 +291,20 @@ class TeamBuilderTab(QWidget):
                 if filtered_data.empty:
                     self.autofill_box.clear()
                     self.autofill_box.setFixedHeight(0)
+                    self.autofill_box.setVisible(False)
                     return
                 
                 # Populate the autofill box with the top 5 results
                 self.populate_autofill_box(filtered_data.head(5))
             except Exception as e:
                 print(f"Error in PC_Box update_autofill: {str(e)}")
+                self.autofill_box.clear()
+                self.autofill_box.setFixedHeight(0)
+                self.autofill_box.setVisible(False)
         else:
             self.autofill_box.clear()
             self.autofill_box.setFixedHeight(0)
+            self.autofill_box.setVisible(False)
     
     def populate_autofill_box(self, filtered_data):
         self.autofill_box.clear()
@@ -248,12 +317,15 @@ class TeamBuilderTab(QWidget):
             self.autofill_box.addItem(item_text)
 
         visible_count = min(len(filtered_data), max_items)
-        self.autofill_box.setFixedHeight(visible_count * item_height if visible_count > 0 else 0)
+        target_height = visible_count * item_height if visible_count > 0 else 0
+        self.autofill_box.setFixedHeight(target_height)
+        self.autofill_box.setVisible(target_height > 0)
 
     def select_autofill_item(self, item):
         """Handle autofill item selection."""
         self.search_entry.setText(item.text().split(" (")[0])  # Set only the name part
         self.autofill_box.setFixedHeight(0)
+        self.autofill_box.setVisible(False)
     
     def add_autofill_to_team(self):
         """Add selected Pokemon to the team."""
@@ -301,41 +373,67 @@ class TeamBuilderTab(QWidget):
 
             pokemon_widget = QWidget()
             layout = QVBoxLayout()
+            layout.setContentsMargins(6, 4, 6, 4)
+            layout.setSpacing(2)
 
             remove_row = QHBoxLayout()
             remove_row.addStretch()
             remove_button = QPushButton("x")
             remove_button.setObjectName("remove-card-button")
-            remove_button.setFixedSize(24, 24)
+            remove_button.setFixedSize(18, 18)
             remove_button.setCursor(Qt.PointingHandCursor)
             remove_button.clicked.connect(lambda _, idx=index: self.remove_team_member(idx))
             remove_row.addWidget(remove_button)
             layout.addLayout(remove_row)
 
             img_label = QLabel()
+            img_label.setFixedHeight(82)
             pixmap = QPixmap(img_path)
             if not pixmap.isNull():
-                pixmap = pixmap.scaledToWidth(100, Qt.SmoothTransformation)
+                pixmap = pixmap.scaled(82, 82, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 img_label.setPixmap(pixmap)
             else:
                 img_label.setText("Image not found")
             img_label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(img_label)
+            img_label.setStyleSheet("QLabel { margin: 0px; padding: 0px; }")
+            layout.addWidget(img_label, alignment=Qt.AlignCenter)
+
+            # Compact info section below image; fixed height prevents overlap.
+            info_widget = QWidget()
+            info_widget.setFixedHeight(34)
+            info_layout = QVBoxLayout(info_widget)
+            info_layout.setContentsMargins(0, 0, 0, 0)
+            info_layout.setSpacing(1)
 
             # Name and Form
             form_text = f" ({form})" if form and form.strip() != "" and form.strip() != " " else ""
             name_label = QLabel(f"{name}{form_text}")
             name_label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(name_label)
+            name_label.setWordWrap(False)
+            name_label.setFixedHeight(14)
+            name_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+            name_label.setStyleSheet(
+                "QLabel {"
+                " font-size: 10px;"
+                " background-color: rgba(255, 255, 255, 235);"
+                " border: 1px solid #D9E1EA;"
+                " border-radius: 6px;"
+                " padding: 0px 3px;"
+                "}"
+            )
+            info_layout.addWidget(name_label, alignment=Qt.AlignHCenter)
 
             # Types
             type_widget = self.build_type_badges_widget(pokemon['Type1'], pokemon['Type2'])
-            layout.addWidget(type_widget)
+            type_widget.setMaximumHeight(20)
+            info_layout.addWidget(type_widget)
+
+            layout.addWidget(info_widget)
 
             pokemon_widget.setLayout(layout)
-            self.team_layout.addWidget(pokemon_widget)
-
-        self.team_layout.addStretch()
+            pokemon_widget.setMinimumHeight(132)
+            pokemon_widget.setMaximumHeight(132)
+            self.team_layout.addWidget(pokemon_widget, index // 3, index % 3)
 
     def matches_search_query(self, row, query):
         """Match search against Pokemon name/form with order-independent tokens."""
@@ -365,7 +463,7 @@ class TeamBuilderTab(QWidget):
         widget = QWidget()
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
         layout.addStretch()
 
         if type1 and str(type1).strip() != "":
@@ -384,16 +482,16 @@ class TeamBuilderTab(QWidget):
         text_color = self.get_contrasting_text_color(badge_color)
         badge = QLabel(type_name)
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedSize(72, 24)
+        badge.setFixedSize(56, 18)
         badge.setStyleSheet(
             "QLabel {"
             f" background-color: {badge_color};"
             " border: 1px solid #B9B9B9;"
-            " border-radius: 11px;"
-            " padding: 0px 6px;"
+            " border-radius: 9px;"
+            " padding: 0px 4px;"
             f" color: {text_color};"
             " font-weight: bold;"
-            " font-size: 11px;"
+            " font-size: 9px;"
             "}"
         )
         return badge
@@ -815,6 +913,7 @@ class TeamBuilderTab(QWidget):
             
             # Hide autofill box and clear search
             self.autofill_box.setFixedHeight(0)
+            self.autofill_box.setVisible(False)
             self.search_entry.clear()
             
         except Exception as e:

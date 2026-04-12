@@ -1,15 +1,33 @@
 import os
+import sys
+from pathlib import Path
 import pandas as pd
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QLineEdit, QListWidget, QScrollArea, QGridLayout
+    QLineEdit, QListWidget, QScrollArea, QGridLayout, QSizePolicy
 )
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import Qt
 
 from ..utils.image_handler import get_image_path
 from ..logic.team_analysis import analyze_defense, analyze_team_profile, analyze_missing_types
 from ..logic.suggestions import generate_team_suggestions
+
+
+class TiledBackgroundWidget(QWidget):
+    """Widget that paints a repeating background image reliably."""
+
+    def __init__(self, image_path=None, parent=None):
+        super().__init__(parent)
+        self._bg_pixmap = QPixmap(image_path) if image_path else QPixmap()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if not self._bg_pixmap.isNull():
+            painter.drawTiledPixmap(self.rect(), self._bg_pixmap)
+        else:
+            painter.fillRect(self.rect(), self.palette().window())
+        super().paintEvent(event)
 
 class PCWidgetTab(QWidget):
     """Tab for PC box Pokemon storage."""
@@ -23,6 +41,15 @@ class PCWidgetTab(QWidget):
         self.create_search_section()
         self.create_pc_box_section()
         self.create_team_builder_section()
+
+    def _resource_base_path(self):
+        """Return root folder that contains bundled data assets."""
+        if hasattr(sys, '_MEIPASS'):
+            return Path(sys._MEIPASS)
+        return Path(__file__).resolve().parents[2]
+
+    def _misc_image_path(self, filename):
+        return self._resource_base_path() / "data" / "misc_images" / filename
     
     def initialize_ui(self):
         """Initialize UI state and populate components."""
@@ -64,7 +91,8 @@ class PCWidgetTab(QWidget):
         # PC Box scroll area
         self.pc_box_scroll = QScrollArea()
         self.pc_box_scroll.setWidgetResizable(True)
-        self.pc_box_widget = QWidget()
+        bg_path = str(self._misc_image_path("PC_box_Cropped.png"))
+        self.pc_box_widget = TiledBackgroundWidget(bg_path)
         self.pc_box_layout = QGridLayout(self.pc_box_widget)
         self.pc_box_scroll.setWidget(self.pc_box_widget)
         
@@ -267,8 +295,18 @@ class PCWidgetTab(QWidget):
             form_text = f" ({form})" if form and form.strip() != "" and form.strip() != " " else ""
             name_label = QLabel(f"{name}{form_text}")
             name_label.setAlignment(Qt.AlignCenter)
-            name_label.setStyleSheet("QLabel { font-size: 11px; }")
-            layout.addWidget(name_label)
+            name_label.setWordWrap(False)
+            name_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+            name_label.setStyleSheet(
+                "QLabel {"
+                " font-size: 11px;"
+                " background-color: rgba(255, 255, 255, 235);"
+                " border: 1px solid #D9E1EA;"
+                " border-radius: 6px;"
+                " padding: 1px 4px;"
+                "}"
+            )
+            layout.addWidget(name_label, alignment=Qt.AlignHCenter)
 
             layout.addWidget(self.build_compact_type_badges_widget(pokemon['Type1'], pokemon['Type2']))
 
@@ -514,8 +552,18 @@ class PCWidgetTab(QWidget):
             form_text = f" ({form})" if form and str(form).strip() not in ["", " "] else ""
             name_label = QLabel(f"{pokemon['Name']}{form_text}")
             name_label.setAlignment(Qt.AlignCenter)
-            name_label.setStyleSheet("QLabel { font-size: 10px; }")
-            layout.addWidget(name_label)
+            name_label.setWordWrap(False)
+            name_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+            name_label.setStyleSheet(
+                "QLabel {"
+                " font-size: 10px;"
+                " background-color: rgba(255, 255, 255, 235);"
+                " border: 1px solid #D9E1EA;"
+                " border-radius: 6px;"
+                " padding: 1px 3px;"
+                "}"
+            )
+            layout.addWidget(name_label, alignment=Qt.AlignHCenter)
 
             layout.addWidget(self.build_compact_type_badges_widget(pokemon['Type1'], pokemon['Type2']))
             self.pc_team_layout.addWidget(pokemon_widget)

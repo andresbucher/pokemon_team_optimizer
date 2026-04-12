@@ -1,14 +1,27 @@
-import os
 import json
+import sys
+from pathlib import Path
 import pandas as pd
+
+
+def _resource_base_path():
+    """Return the root folder that contains the data directory."""
+    # PyInstaller extracts bundled files to _MEIPASS at runtime.
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parents[2]
+
+
+def _data_path(*parts):
+    return _resource_base_path() / 'data' / Path(*parts)
 
 def load_pokemon_data():
     """Load Pokemon data from CSV file"""
-    return pd.read_csv('./data/Pokemon.csv')
+    return pd.read_csv(_data_path('Pokemon.csv'))
 
 def load_json_data(filename):
     """Load JSON data from file"""
-    with open(f'./data/json/{filename}.json', 'r') as f:
+    with open(_data_path('json', f'{filename}.json'), 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def get_type_colors():

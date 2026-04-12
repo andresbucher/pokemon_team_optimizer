@@ -57,13 +57,13 @@ pip install -r requirements.txt
 
 3. Run the application:
 ```bash
-python main.py
+python Main.py
 ```
 
 ## Usage
 
 ### Team Builder
-1. Launch the application using `python main.py`
+1. Launch the application using `python Main.py`
 2. Search for Pokemon by name or form
 3. Apply filters to narrow the available pool
 4. Add Pokemon directly to the team and remove them with the card controls
