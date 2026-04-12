@@ -3,9 +3,10 @@ import pandas as pd
 from .role_detection import guess_role
 from .team_analysis import analyze_defense
 
-def generate_team_suggestions(team, filtered_data, defense_summary):
+def generate_team_suggestions(team, filtered_data, defense_summary, ignored_types=None):
     """Generate suggestions for team improvements."""
     suggestions = []
+    ignored_types = ignored_types or set()
     
     # Skip if team is empty
     if not team:
@@ -40,7 +41,10 @@ def generate_team_suggestions(team, filtered_data, defense_summary):
     
     # Find weaknesses in current team
     weaknesses = []
+    _, _, all_types = analyze_defense(team)
     for i, value in enumerate(defense_summary):
+        if all_types[i] in ignored_types:
+            continue
         if value > 1.0:
             weaknesses.append(i)
     
@@ -55,7 +59,7 @@ def generate_team_suggestions(team, filtered_data, defense_summary):
         
         # Add to temporary team to evaluate defense
         temp_team = team.copy() + [pokemon_dict]
-        _, new_defense_summary, all_types = analyze_defense(temp_team)
+        _, new_defense_summary, _ = analyze_defense(temp_team)
         
         # Check how much this Pokémon improves weaknesses
         for idx in weaknesses:

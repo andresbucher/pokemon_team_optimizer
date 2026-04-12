@@ -39,6 +39,15 @@ stylesheet = """
     QPushButton:hover {
         background-color: #5A9BD5;
     }
+    QPushButton#remove-card-button {
+        background-color: #E05A5A;
+        border-radius: 12px;
+        font-weight: bold;
+        padding: 0px;
+    }
+    QPushButton#remove-card-button:hover {
+        background-color: #C84A4A;
+    }
     QComboBox {
         border: 1px solid #2E8B57;
         padding: 5px;

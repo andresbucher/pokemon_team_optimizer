@@ -86,3 +86,115 @@ def analyze_missing_types(team):
     
     missing_types = [t for t in all_types if t not in team_types]
     return missing_types
+
+def analyze_combined(team):
+    """Combine defense, attack, and team-type presence into one analysis view model."""
+    _, defense_summary, all_types = analyze_defense(team)
+    _, attack_summary, _ = analyze_attack(team)
+    team_type_set = set()
+
+    for pokemon in team:
+        for poke_type in [pokemon.get('Type1'), pokemon.get('Type2')]:
+            if poke_type and poke_type.strip() != " ":
+                team_type_set.add(poke_type)
+
+    combined_rows = []
+    for idx, type_name in enumerate(all_types):
+        combined_rows.append({
+            "type": type_name,
+            "defense": float(defense_summary[idx]),
+            "attack": float(attack_summary.get(type_name, 0.0)),
+            "team_type_status": "Present" if type_name in team_type_set else "Missing"
+        })
+
+    return combined_rows
+
+def analyze_team_profile(team, ignored_types=None):
+    """Build weighted team profile for weaknesses, resistances, and offensive coverage."""
+    ignored_types = ignored_types or set()
+    type_chart = get_type_chart()
+    defense_chart = type_chart["defense"]
+    attack_chart = type_chart["attack"]
+    all_types = list(defense_chart.keys())
+
+    defense_rows = []
+    resistance_rows = []
+    coverage_rows = []
+
+    for attack_type in all_types:
+        if attack_type in ignored_types:
+            continue
+
+        defensive_values = []
+        for pokemon in team:
+            mult = 1.0
+            for poke_type in [pokemon.get('Type1'), pokemon.get('Type2')]:
+                if poke_type and str(poke_type).strip() != " ":
+                    if poke_type in defense_chart and attack_type in defense_chart[poke_type]:
+                        mult *= defense_chart[poke_type][attack_type]
+            defensive_values.append(mult)
+
+        weak_2x = sum(1 for v in defensive_values if np.isclose(v, 2.0))
+        weak_4x = sum(1 for v in defensive_values if np.isclose(v, 4.0))
+        resist_05 = sum(1 for v in defensive_values if np.isclose(v, 0.5))
+        resist_025 = sum(1 for v in defensive_values if np.isclose(v, 0.25))
+        immune_0 = sum(1 for v in defensive_values if np.isclose(v, 0.0))
+
+        danger_score = (weak_2x + (3 * weak_4x)) - (resist_05 + (2 * resist_025) + (3 * immune_0))
+
+        defensive_row = {
+            "type": attack_type,
+            "weak_2x": weak_2x,
+            "weak_4x": weak_4x,
+            "danger": danger_score,
+        }
+        resistance_row = {
+            "type": attack_type,
+            "resist_05": resist_05,
+            "resist_025": resist_025,
+            "immune_0": immune_0,
+            "safety": resist_05 + (2 * resist_025) + (3 * immune_0),
+        }
+
+        defense_rows.append(defensive_row)
+        resistance_rows.append(resistance_row)
+
+        super_users = 0
+        max_attack = 0.0
+        for pokemon in team:
+            poke_attack_types = [t for t in [pokemon.get('Type1'), pokemon.get('Type2')] if t and str(t).strip() != " "]
+            best = 1.0
+            for atk_type in poke_attack_types:
+                if atk_type in attack_chart and attack_type in attack_chart[atk_type]:
+                    best = max(best, attack_chart[atk_type][attack_type])
+            if best > 1.0:
+                super_users += 1
+            max_attack = max(max_attack, best)
+
+        coverage_rows.append({
+            "type": attack_type,
+            "super_users": super_users,
+            "max_attack": max_attack,
+        })
+
+    weak_section = sorted(
+        [row for row in defense_rows if (row["weak_2x"] + row["weak_4x"]) > 0],
+        key=lambda row: (row["danger"], row["weak_4x"], row["weak_2x"]),
+        reverse=True,
+    )
+    resist_section = sorted(
+        [row for row in resistance_rows if (row["resist_05"] + row["resist_025"] + row["immune_0"]) > 0],
+        key=lambda row: (row["safety"], row["immune_0"], row["resist_025"], row["resist_05"]),
+        reverse=True,
+    )
+    coverage_section = sorted(
+        coverage_rows,
+        key=lambda row: (row["super_users"], row["max_attack"]),
+        reverse=True,
+    )
+
+    return {
+        "weaknesses": weak_section,
+        "resistances": resist_section,
+        "coverage": coverage_section,
+    }

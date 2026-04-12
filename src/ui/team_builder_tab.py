@@ -2,13 +2,13 @@ import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QComboBox, QCheckBox, QLineEdit, QListWidget, QScrollArea,
-    QTableWidget, QTableWidgetItem, QSizePolicy, QGridLayout
+    QSizePolicy, QGridLayout, QFrame
 )
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
 
 from ..utils.image_handler import get_image_path
-from ..logic.team_analysis import analyze_defense, analyze_attack, analyze_missing_types
+from ..logic.team_analysis import analyze_defense, analyze_team_profile, analyze_missing_types
 from ..logic.suggestions import generate_team_suggestions
 
 class TeamBuilderTab(QWidget):
@@ -70,6 +70,10 @@ class TeamBuilderTab(QWidget):
         
         # Add to main layout
         self.layout.addLayout(filters_layout)
+
+        self.filters_note_label = QLabel("Note: Gen Filters affect analysis and suggestions, but not search results (Fairy Type)")
+        self.filters_note_label.setStyleSheet("QLabel { font-size: 12px; color: #5B6470; }")
+        self.layout.addWidget(self.filters_note_label)
     
     def create_search_section(self):
         """Create search section for finding Pokemon."""
@@ -97,18 +101,18 @@ class TeamBuilderTab(QWidget):
     
     def create_team_display_section(self):
         """Create section to display the current team."""
-        # Team scroll area
-        team_scroll = QScrollArea()
-        team_scroll.setWidgetResizable(True)
+        # Team display area (non-scrollable)
         team_widget = QWidget()
         self.team_layout = QHBoxLayout(team_widget)
-        team_scroll.setWidget(team_widget)
+        self.team_layout.setContentsMargins(0, 0, 0, 0)
+        self.team_layout.setSpacing(8)
+        self.team_layout.addStretch()
         
         # Add to main layout
         team_label = QLabel("Current Team:")
         team_label.setObjectName("section-title")
         self.layout.addWidget(team_label)
-        self.layout.addWidget(team_scroll)
+        self.layout.addWidget(team_widget)
     
     def create_analysis_section(self):
         """Create section for team analysis."""
@@ -118,15 +122,13 @@ class TeamBuilderTab(QWidget):
         
         # Analysis buttons
         analysis_buttons_layout = QHBoxLayout()
-        self.analyze_defense_button = QPushButton("Analyze Defense")
-        self.analyze_attack_button = QPushButton("Analyze Attack")
-        self.analyze_missing_types_button = QPushButton("Analyze Missing Types")
+        self.analyze_team_button = QPushButton("Analyze Team (Defense + Attack + Types)")
         self.clear_analysis_button = QPushButton("Clear Analysis")
+        self.generate_suggestions_button = QPushButton("Generate Suggestions")
         
-        analysis_buttons_layout.addWidget(self.analyze_defense_button)
-        analysis_buttons_layout.addWidget(self.analyze_attack_button)
-        analysis_buttons_layout.addWidget(self.analyze_missing_types_button)
+        analysis_buttons_layout.addWidget(self.analyze_team_button)
         analysis_buttons_layout.addWidget(self.clear_analysis_button)
+        analysis_buttons_layout.addWidget(self.generate_suggestions_button)
         
         # Analysis results area
         self.analysis_scroll = QScrollArea()
@@ -146,19 +148,18 @@ class TeamBuilderTab(QWidget):
         suggestions_label = QLabel("Team Suggestions")
         suggestions_label.setObjectName("section-title")
         
-        # Generate suggestions button
-        self.generate_suggestions_button = QPushButton("Generate Suggestions")
-        
         # Suggestions display area
         self.suggestions_scroll = QScrollArea()
         self.suggestions_scroll.setWidgetResizable(True)
         self.suggestions_widget = QWidget()
         self.suggestions_layout = QGridLayout(self.suggestions_widget)
+        self.suggestions_layout.setContentsMargins(6, 6, 6, 6)
+        self.suggestions_layout.setHorizontalSpacing(8)
+        self.suggestions_layout.setVerticalSpacing(8)
         self.suggestions_scroll.setWidget(self.suggestions_widget)
         
         # Add to main layout
         self.layout.addWidget(suggestions_label)
-        self.layout.addWidget(self.generate_suggestions_button)
         self.layout.addWidget(self.suggestions_scroll)
     
     def populate_type_filter(self):
@@ -200,9 +201,7 @@ class TeamBuilderTab(QWidget):
         self.add_pokemon_button.clicked.connect(self.add_autofill_to_team)
         
         # Connect analysis buttons
-        self.analyze_defense_button.clicked.connect(self.analyze_defense)
-        self.analyze_attack_button.clicked.connect(self.analyze_attack)
-        self.analyze_missing_types_button.clicked.connect(self.analyze_missing_types)
+        self.analyze_team_button.clicked.connect(self.analyze_team)
         self.clear_analysis_button.clicked.connect(self.clear_analysis)
         
         # Connect suggestions button
@@ -215,7 +214,10 @@ class TeamBuilderTab(QWidget):
         if query:
             try:
                 filtered_data = self.parent.filtered_data[
-                    self.parent.filtered_data['Name'].str.lower().str.contains(query)
+                    self.parent.filtered_data.apply(
+                        lambda row: self.matches_search_query(row, query),
+                        axis=1
+                    )
                 ].copy()
 
                 # Sort by name for consistent results
@@ -262,8 +264,13 @@ class TeamBuilderTab(QWidget):
         if not name:
             return
         
-        # Find matching Pokemon
-        matches = self.parent.filtered_data[self.parent.filtered_data['Name'] == name]
+        name_query = name.lower()
+        matches = self.parent.filtered_data[
+            self.parent.filtered_data.apply(
+                lambda row: self.matches_search_query(row, name_query),
+                axis=1
+            )
+        ]
         if len(matches) == 0:
             return
         
@@ -278,13 +285,14 @@ class TeamBuilderTab(QWidget):
     def display_team(self):
         """Display the current team."""
         # Clear the current team layout
-        for i in reversed(range(self.team_layout.count())):
-            widget = self.team_layout.itemAt(i).widget()
+        while self.team_layout.count():
+            item = self.team_layout.takeAt(0)
+            widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
 
-        # Display each Pokémon in the team
-        for pokemon in self.parent.team:
+        # Display each Pokemon in the team
+        for index, pokemon in enumerate(self.parent.team):
             pokemon_id = pokemon["ID"]
             name = pokemon["Name"]
             form = pokemon["Form"]
@@ -293,6 +301,16 @@ class TeamBuilderTab(QWidget):
 
             pokemon_widget = QWidget()
             layout = QVBoxLayout()
+
+            remove_row = QHBoxLayout()
+            remove_row.addStretch()
+            remove_button = QPushButton("x")
+            remove_button.setObjectName("remove-card-button")
+            remove_button.setFixedSize(24, 24)
+            remove_button.setCursor(Qt.PointingHandCursor)
+            remove_button.clicked.connect(lambda _, idx=index: self.remove_team_member(idx))
+            remove_row.addWidget(remove_button)
+            layout.addLayout(remove_row)
 
             img_label = QLabel()
             pixmap = QPixmap(img_path)
@@ -311,56 +329,348 @@ class TeamBuilderTab(QWidget):
             layout.addWidget(name_label)
 
             # Types
-            types = f"{pokemon['Type1']}/{pokemon['Type2']}" if pokemon["Type2"] != " " else pokemon['Type1']
-            types_label = QLabel(types)
-            types_label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(types_label)
+            type_widget = self.build_type_badges_widget(pokemon['Type1'], pokemon['Type2'])
+            layout.addWidget(type_widget)
 
             pokemon_widget.setLayout(layout)
             self.team_layout.addWidget(pokemon_widget)
 
-    def analyze_defense(self):
-        """Analyze team's defensive capabilities."""
+        self.team_layout.addStretch()
+
+    def matches_search_query(self, row, query):
+        """Match search against Pokemon name/form with order-independent tokens."""
+        normalized_query = self.normalize_search_text(query)
+        if not normalized_query:
+            return True
+
+        name = self.normalize_search_text(str(row.get('Name', '')))
+        form = self.normalize_search_text(str(row.get('Form', '')))
+        combined = f"{name} {form}".strip()
+
+        if normalized_query in combined:
+            return True
+
+        query_tokens = normalized_query.split()
+        return all(token in combined for token in query_tokens)
+
+    def normalize_search_text(self, text):
+        """Normalize text for robust search matching."""
+        normalized = str(text).lower().strip()
+        for char in ["(", ")", "-", "_", "/", ","]:
+            normalized = normalized.replace(char, " ")
+        return " ".join(normalized.split())
+
+    def build_type_badges_widget(self, type1, type2):
+        """Create a centered row of colored type badges."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addStretch()
+
+        if type1 and str(type1).strip() != "":
+            layout.addWidget(self.create_type_badge(str(type1).strip()))
+        if type2 and str(type2).strip() != "":
+            normalized_type2 = str(type2).strip()
+            if normalized_type2 != " ":
+                layout.addWidget(self.create_type_badge(normalized_type2))
+
+        layout.addStretch()
+        return widget
+
+    def create_type_badge(self, type_name):
+        """Create a single type badge with consistent colors and contrast."""
+        badge_color = self.parent.type_colors.get(type_name, "#FFFFFF")
+        text_color = self.get_contrasting_text_color(badge_color)
+        badge = QLabel(type_name)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedSize(72, 24)
+        badge.setStyleSheet(
+            "QLabel {"
+            f" background-color: {badge_color};"
+            " border: 1px solid #B9B9B9;"
+            " border-radius: 11px;"
+            " padding: 0px 6px;"
+            f" color: {text_color};"
+            " font-weight: bold;"
+            " font-size: 11px;"
+            "}"
+        )
+        return badge
+
+    def is_pre_fairy_generation(self):
+        """Return True when selected generation is before Fairy type existed."""
+        gen_index = self.gen_filter.currentIndex()
+        return gen_index > 0 and gen_index < 6
+
+    def normalized_team_for_generation(self):
+        """Return team copy with Fairy treated as Normal for pre-Gen-6 analyses."""
+        normalized_team = []
+        pre_fairy = self.is_pre_fairy_generation()
+
+        for pokemon in self.parent.team:
+            pokemon_copy = dict(pokemon)
+            if pre_fairy:
+                if pokemon_copy.get('Type1') == 'Fairy':
+                    pokemon_copy['Type1'] = 'Normal'
+                if pokemon_copy.get('Type2') == 'Fairy':
+                    pokemon_copy['Type2'] = 'Normal'
+            normalized_team.append(pokemon_copy)
+
+        return normalized_team
+
+    def remove_team_member(self, index):
+        """Remove one Pokemon from the team by index."""
+        if 0 <= index < len(self.parent.team):
+            self.parent.team.pop(index)
+            self.display_team()
+
+    def analyze_team(self):
+        """Analyze team with weakness, resistance, and coverage sections."""
         self.clear_analysis()
         if not self.parent.team:
             label = QLabel("No team members to analyze.")
             self.analysis_layout.addWidget(label)
             return
 
-        _, defense_summary, all_types = analyze_defense(self.parent.team)
-        result = "Defense Summary:\n"
-        for t, val in zip(all_types, defense_summary):
-            result += f"{t}: {val}\n"
-        label = QLabel(result)
-        self.analysis_layout.addWidget(label)
+        effective_team = self.normalized_team_for_generation()
+        ignored_types = {"Fairy"} if self.is_pre_fairy_generation() else set()
+        profile = analyze_team_profile(effective_team, ignored_types=ignored_types)
 
-    def analyze_attack(self):
-        """Analyze team's offensive capabilities."""
-        self.clear_analysis()
-        if not self.parent.team:
-            label = QLabel("No team members to analyze.")
-            self.analysis_layout.addWidget(label)
-            return
+        weakness_by_type = {row["type"]: row for row in profile["weaknesses"]}
+        resistance_by_type = {row["type"]: row for row in profile["resistances"]}
+        matchup_types = sorted(set(weakness_by_type.keys()) | set(resistance_by_type.keys()))
 
-        _, summary_matrix, effectiveness_counts = analyze_attack(self.parent.team)
-        result = "Attack Summary:\n"
-        for t, val in summary_matrix.items():
-            result += f"{t}: {val}\n"
-        label = QLabel(result)
-        self.analysis_layout.addWidget(label)
+        matchup_rows = []
+        for type_name in matchup_types:
+            weak_row = weakness_by_type.get(type_name, {"weak_2x": 0, "weak_4x": 0, "danger": 0})
+            resist_row = resistance_by_type.get(type_name, {"resist_05": 0, "resist_025": 0, "immune_0": 0, "safety": 0})
+            matchup_rows.append({
+                "type": type_name,
+                "weak_2x": weak_row["weak_2x"],
+                "weak_4x": weak_row["weak_4x"],
+                "danger": weak_row["danger"],
+                "resist_05": resist_row["resist_05"],
+                "resist_025": resist_row["resist_025"],
+                "immune_0": resist_row["immune_0"],
+                "safety": resist_row["safety"],
+            })
 
-    def analyze_missing_types(self):
-        """Analyze types missing from the team."""
-        self.clear_analysis()
-        if not self.parent.team:
-            label = QLabel("No team members to analyze.")
-            self.analysis_layout.addWidget(label)
-            return
+        matchup_rows.sort(
+            key=lambda row: (row["danger"], row["safety"], row["weak_4x"], row["immune_0"]),
+            reverse=True,
+        )
 
-        missing_types = analyze_missing_types(self.parent.team)
-        result = "Missing Types:\n" + ", ".join(missing_types)
-        label = QLabel(result)
-        self.analysis_layout.addWidget(label)
+        missing_types = analyze_missing_types(effective_team)
+        missing_types = [type_name for type_name in missing_types if type_name not in ignored_types]
+
+        panel = QWidget()
+        panel_layout = QHBoxLayout(panel)
+
+        matchups_card = self.build_matchups_card(
+            matchup_rows,
+            "#F4F8FC"
+        )
+        coverage_card = self.build_coverage_card(
+            profile["coverage"],
+            "#F6FBF4"
+        )
+        missing_types_card = self.build_missing_types_grid_card(
+            missing_types,
+            "#FFF9F4"
+        )
+
+        panel_layout.addWidget(matchups_card)
+        panel_layout.addWidget(coverage_card)
+        panel_layout.addWidget(missing_types_card)
+        self.analysis_layout.addWidget(panel)
+
+    def build_analysis_base_card(self, title, bg_color):
+        """Create base card for analysis sections."""
+        card = QFrame()
+        card.setStyleSheet(f"QFrame {{ background-color: {bg_color}; border: 1px solid #C7D4E2; border-radius: 10px; }}")
+        layout = QVBoxLayout(card)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("subsection-title")
+        layout.addWidget(title_label)
+
+        return card, layout
+
+    def build_matchups_card(self, matchup_rows, bg_color):
+        """Build combined defensive matchups section."""
+        card, layout = self.build_analysis_base_card("Type Matchups", bg_color)
+
+        if not matchup_rows:
+            info = QLabel("No notable defensive matchups")
+            layout.addWidget(info)
+            layout.addStretch()
+            return card
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(4)
+        grid.setVerticalSpacing(4)
+        columns = 6
+
+        for idx, row in enumerate(matchup_rows):
+            severity = self.get_weakness_severity(row["danger"])
+            if row["danger"] <= 0 and row["safety"] >= 2:
+                severity = "low"
+
+            grid.addWidget(
+                self.build_type_metric_tile(
+                    row["type"],
+                    f"x2:{row['weak_2x']} x4:{row['weak_4x']}\nR:{row['resist_05']} RR:{row['resist_025']} I:{row['immune_0']}",
+                    severity=severity,
+                ),
+                idx // columns,
+                idx % columns,
+            )
+
+        layout.addLayout(grid)
+        layout.addStretch()
+        return card
+
+    def build_coverage_card(self, coverage_rows, bg_color):
+        """Build offensive coverage section."""
+        card, layout = self.build_analysis_base_card("Type Coverage", bg_color)
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(4)
+        grid.setVerticalSpacing(4)
+        columns = 6
+        for idx, row in enumerate(coverage_rows):
+            coverage_text = f"Super-effective members:{row['super_users']}"
+
+            grid.addWidget(
+                self.build_type_metric_tile(
+                    row["type"],
+                    coverage_text,
+                    severity=self.get_coverage_severity(row["super_users"], row["max_attack"])
+                ),
+                idx // columns,
+                idx % columns,
+            )
+
+        layout.addLayout(grid)
+
+        layout.addStretch()
+        return card
+
+    def build_missing_types_grid_card(self, missing_types, bg_color):
+        """Build missing type section using compact badge tiles."""
+        card, layout = self.build_analysis_base_card("Missing Types", bg_color)
+
+        if not missing_types:
+            info = QLabel("No missing types")
+            layout.addWidget(info)
+            layout.addStretch()
+            return card
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(4)
+        grid.setVerticalSpacing(4)
+        columns = 6
+
+        for idx, type_name in enumerate(missing_types):
+            tile = QFrame()
+            tile.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #D9E1EA; border-radius: 8px; }")
+            tile_layout = QVBoxLayout(tile)
+            tile_layout.setContentsMargins(4, 4, 4, 4)
+            tile_layout.addWidget(self.create_type_badge(type_name), alignment=Qt.AlignCenter)
+            grid.addWidget(tile, idx // columns, idx % columns)
+
+        layout.addLayout(grid)
+        layout.addStretch()
+        return card
+
+    def build_type_metric_tile(self, type_name, metric_text, severity="neutral"):
+        """Build tile containing a type badge and metric details below it."""
+        tile = QFrame()
+        tile.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #D9E1EA; border-radius: 10px; }")
+        tile_layout = QVBoxLayout(tile)
+        tile_layout.setContentsMargins(4, 4, 4, 4)
+        tile_layout.setSpacing(3)
+
+        type_badge = self.create_type_badge(type_name)
+        metric_label = QLabel(metric_text)
+        metric_label.setAlignment(Qt.AlignCenter)
+        metric_label.setWordWrap(True)
+        metric_colors = self.get_metric_severity_colors(severity)
+        metric_label.setStyleSheet(
+            "QLabel {"
+            f" background-color: {metric_colors['bg']};"
+            f" border: 1px solid {metric_colors['border']};"
+            " border-radius: 10px;"
+            " padding: 2px 4px;"
+            " font-size: 10px;"
+            f" color: {metric_colors['text']};"
+            "}"
+        )
+
+        type_holder = QWidget()
+        type_holder_layout = QHBoxLayout(type_holder)
+        type_holder_layout.setContentsMargins(0, 0, 0, 0)
+        type_holder_layout.addStretch()
+        type_holder_layout.addWidget(type_badge)
+        type_holder_layout.addStretch()
+
+        tile_layout.addWidget(type_holder)
+        tile_layout.addWidget(metric_label)
+        return tile
+
+    def get_metric_severity_colors(self, severity):
+        """Map a severity level to badge colors."""
+        severity_map = {
+            "high": {"bg": "#FDECEC", "border": "#E9A7A7", "text": "#8D1D1D"},
+            "medium": {"bg": "#FFF6E5", "border": "#E5C58D", "text": "#7A5410"},
+            "low": {"bg": "#EAF8ED", "border": "#9ED6A9", "text": "#1F6A2C"},
+            "neutral": {"bg": "#FFFFFF", "border": "#D0D7E2", "text": "#334155"},
+        }
+        return severity_map.get(severity, severity_map["neutral"])
+
+    def get_weakness_severity(self, danger):
+        """Severity for defensive danger score."""
+        if danger >= 3:
+            return "high"
+        if danger >= 1:
+            return "medium"
+        return "low"
+
+    def get_resistance_severity(self, safety):
+        """Severity for resistance strength score."""
+        if safety >= 5:
+            return "high"
+        if safety >= 2:
+            return "medium"
+        return "low"
+
+    def get_coverage_severity(self, super_users, max_attack):
+        """Severity for offensive coverage quality."""
+        if super_users >= 3 or max_attack >= 4.0:
+            return "low"
+        if super_users >= 1 or max_attack > 1.0:
+            return "medium"
+        return "high"
+
+    def get_contrasting_text_color(self, hex_color):
+        """Return black or white text based on badge background luminance."""
+        cleaned = hex_color.lstrip('#')
+        if len(cleaned) != 6:
+            return "#000000"
+
+        try:
+            red = int(cleaned[0:2], 16)
+            green = int(cleaned[2:4], 16)
+            blue = int(cleaned[4:6], 16)
+        except ValueError:
+            return "#000000"
+
+        luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+        return "#000000" if luminance > 160 else "#FFFFFF"
 
     def clear_analysis(self):
         """Clear analysis results."""
@@ -372,11 +682,21 @@ class TeamBuilderTab(QWidget):
 
     def generate_suggestions(self):
         """Generate team improvement suggestions."""
+        self.parent.apply_filters()
         if not self.parent.team:
             self.display_suggestions([])
             return
-        _, defense_summary, _ = analyze_defense(self.parent.team)
-        suggestions = generate_team_suggestions(self.parent.team, self.parent.filtered_data, defense_summary)
+
+        effective_team = self.normalized_team_for_generation()
+        _, defense_summary, _ = analyze_defense(effective_team)
+        ignored_types = {"Fairy"} if self.is_pre_fairy_generation() else None
+
+        suggestions = generate_team_suggestions(
+            effective_team,
+            self.parent.filtered_data,
+            defense_summary,
+            ignored_types=ignored_types
+        )
         self.display_suggestions(suggestions)
 
     def display_suggestions(self, suggestions):
@@ -388,7 +708,7 @@ class TeamBuilderTab(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
-        fixed_width = 100
+        fixed_image_size = 78
         for i, suggestion in enumerate(suggestions):
             name = suggestion['name']
             form = suggestion['form']
@@ -398,29 +718,69 @@ class TeamBuilderTab(QWidget):
             pokemon = self.parent.pokemon_data[
                 (self.parent.pokemon_data['Name'] == name) & (self.parent.pokemon_data['Form'] == form)
             ].iloc[0]
-            types = f"{pokemon['Type1']}/{pokemon['Type2']}" if pokemon["Type2"] != " " else pokemon['Type1']
             bst_total = pokemon['Total']
             form_text = f" ({form})" if form != " " else ""
             image_path = get_image_path(pokemon['ID'], name, form)
 
             suggestion_label = QLabel(
-                f"Name: {name}{form_text}\nTypes: {types}\nBST: {bst_total}\nRole: {role}\nScore: {score}"
+                f"Name: {name}{form_text}\nBST: {bst_total}\nRole: {role}\nScore: {score}"
             )
+            suggestion_label.setStyleSheet("QLabel { font-size: 12px; }")
 
             image_label = QLabel()
+            image_label.setFixedSize(fixed_image_size, fixed_image_size)
+            image_label.setAlignment(Qt.AlignCenter)
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
-                pixmap = pixmap.scaledToWidth(fixed_width, Qt.SmoothTransformation)
+                pixmap = pixmap.scaled(
+                    fixed_image_size,
+                    fixed_image_size,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
                 image_label.setPixmap(pixmap)
             else:
                 image_label.setText("Image not found")
 
             vbox = QVBoxLayout()
+            vbox.setContentsMargins(6, 6, 6, 6)
+            vbox.setSpacing(6)
             vbox.addWidget(image_label)
             vbox.addWidget(suggestion_label)
+            vbox.addWidget(self.build_type_badges_widget(pokemon['Type1'], pokemon['Type2']))
+            add_button = QPushButton("Add to Team")
+            add_button.setStyleSheet("QPushButton { padding: 6px; font-size: 12px; }")
+            add_button.clicked.connect(
+                lambda _, n=name, f=form: self.add_suggestion_to_team(n, f)
+            )
+            vbox.addWidget(add_button)
             widget = QWidget()
             widget.setLayout(vbox)
-            self.suggestions_layout.addWidget(widget, i // 6, i % 6)
+            widget.setMinimumWidth(148)
+            widget.setMaximumWidth(148)
+            self.suggestions_layout.addWidget(widget, i // 8, i % 8)
+
+    def add_suggestion_to_team(self, name, form):
+        """Add a suggested Pokemon directly to the team."""
+        if len(self.parent.team) >= 6:
+            return
+
+        duplicate = any(
+            member['Name'] == name and member['Form'] == form
+            for member in self.parent.team
+        )
+        if duplicate:
+            return
+
+        match = self.parent.filtered_data[
+            (self.parent.filtered_data['Name'] == name) &
+            (self.parent.filtered_data['Form'].fillna(' ') == form)
+        ]
+        if len(match) == 0:
+            return
+
+        self.parent.team.append(match.iloc[0].to_dict())
+        self.display_team()
 
     def add_autofill_item_to_team(self, item):
         """Add the clicked autofill suggestion directly to the team."""
