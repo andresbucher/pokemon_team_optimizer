@@ -1,6 +1,7 @@
 # Pokemon Team Builder / Optimizer
 
-Pokemon Team Optimizer is a desktop tool for building stronger teams from your available Pokemon, comparing type matchups, and quickly testing different team combinations.
+Pokemon Team Optimizer is a desktop python application for building stronger teams from your available Pokemon, comparing type matchups and their basestat. With this you can either set a partial team and see which pokemon would fit your current team the best or have a "PC-Box" Widget where you can add many pokemon and it will give you the best optimized pokemon team! You can even "star" your favorite pokemon which have to be included!
+Perfect for Egglocks or other main-pokemon gameplays where you have many different pokemon in your box and want a fast way to check your type matchups :) 
 
 ## Screenshots
 
